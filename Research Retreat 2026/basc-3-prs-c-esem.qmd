@@ -1,0 +1,1019 @@
+---
+title: "basc-3-prs-c-esem"
+format: html
+output: html document
+author: Reagan Hicks
+---
+
+# Set Up
+
+```{r}
+library(tidyverse)
+library(haven)
+library(ggplot2)
+library(psych)
+library(semPlot)
+library(semTools)
+library(corrplot)
+library(nFactors)
+library(parameters)
+library(GPArotation)
+library(esemComp)
+library(pheatmap)
+library(parameters)
+library(reshape2)
+library(qgraph)
+library(dynamic)
+library(MVN)
+options(digits = 3)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Data
+
+```{r}
+# Referred NDD Sample
+basc3p <- read_rds("basc3.p.first.child.rds")
+bascsub <- basc3p %>% 
+  select(basc3_ad_t, basc3_fc_t, basc3_so_t, basc3_dl_t, basc3_le_t, basc3_cp_t, basc3_ha_t, basc3_ag_t, basc3_ax_t, basc3_dp_t, basc3_sm_t, basc3_ay_t, basc3_wd_t, basc3_ap_t) %>% 
+  rename(
+    Adaptability = basc3_ad_t, 
+    Functional.Communication = basc3_fc_t, 
+    Social.Skills = basc3_so_t, 
+    Activities.of.Daily.Living = basc3_dl_t, 
+    Leadership = basc3_le_t, 
+    Conduct.Problems = basc3_cp_t, 
+    Hyperactivity = basc3_ha_t, 
+    Aggression = basc3_ag_t, 
+    Anxiety = basc3_ax_t, 
+    Depression = basc3_dp_t, 
+    Somatization = basc3_sm_t, 
+    Atypicality = basc3_ay_t, 
+    Withdrawal = basc3_wd_t, 
+    Attention.Problems = basc3_ap_t
+  )
+
+# General Norm Sample 
+gendf <- read.csv("General_Norm_Cor_Matrix.csv", row.names = 1)
+R <- as.matrix(gendf)
+R[R == ""] <- NA # Convert blanks to NA
+R <- apply(R, 2, as.numeric)
+R[upper.tri(R)] <- t(R)[upper.tri(R)] # Fill upper triangle
+diag(R) <- 1 # Fill diagonals with 1
+rownames(R) <- colnames(R)
+sds <- c(10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10)
+D <- diag(sds)
+S <- D %*% R %*% D
+rownames(S) <- rownames(R)
+colnames(S) <- colnames(R)
+
+# Australian Sample
+fullaussie <- read.csv("Australiandata.csv")
+fullaussie[fullaussie == "" | fullaussie == " "] <- NA
+fullaussie <- fullaussie %>% 
+  filter(Form == 5)
+
+aussiesub <- fullaussie %>% 
+  select(basc3_ad_t, basc3_fc_t, basc3_so_t, basc3_dl_t, basc3_le_t, basc3_cp_t, basc3_ha_t, basc3_ag_t, basc3_ax_t, basc3_dp_t, basc3_sm_t, basc3_ay_t, basc3_wd_t, basc3_ap_t) %>% 
+  rename(
+    Adaptability = basc3_ad_t, 
+    Functional.Communication = basc3_fc_t, 
+    Social.Skills = basc3_so_t, 
+    Activities.of.Daily.Living = basc3_dl_t, 
+    Leadership = basc3_le_t, 
+    Conduct.Problems = basc3_cp_t, 
+    Hyperactivity = basc3_ha_t, 
+    Aggression = basc3_ag_t, 
+    Anxiety = basc3_ax_t, 
+    Depression = basc3_dp_t, 
+    Somatization = basc3_sm_t, 
+    Atypicality = basc3_ay_t, 
+    Withdrawal = basc3_wd_t, 
+    Attention.Problems = basc3_ap_t
+  )
+
+# School Sample
+basc3s <- read_csv("prs_schoolonly.csv")
+
+basc3sitems <- basc3s %>% 
+  select(Age, "1":"175")
+
+basc3sitems <- basc3sitems %>% 
+  mutate(across(c(`1`:`175`), ~ . - 1))
+basc3sitems <- basc3sitems %>% 
+  mutate(
+    ha_raw = rowSums(across(c(`24`, `32`, `42`, `73`, `93`, `99`, `114`, `151`, `159`, `166`, `172`))), 
+    ag_raw = rowSums(across(c(`35`, `41`, `50`, `59`, `98`, `106`, `117`, `121`, `146`))), 
+    cp_raw = rowSums(across(c(`3`, `7`, `23`, `43`, `55`, `68`, `74`, `141`, `144`, `164`))), 
+    ax_raw = rowSums(across(c(`9`, `21`, `31`, `38`, `54`, `67`, `84`, `104`, `107`, `112`, `128`, `136`, `147`, `160`))), 
+    dp_raw = rowSums(across(c(`4`, `34`, `40`, `45`, `52`, `60`, `80`, `100`, `110`, `116`, `119`, `124`, `129`))), 
+    sm_raw = rowSums(across(c(`6`, `15`, `20`, `39`, `49`, `57`, `63`, `78`, `105`, `118`, `132`, `161`))), 
+    ap_raw = rowSums(across(c(`1`, `11`, `28`, `83`, `91`, `127`, `175`))), 
+    ay_raw = rowSums(across(c(`12`, `17`, `58`, `81`, `88`, `115`, `122`, `125`, `145`, `152`, `157`, `158`, `167`, `171`))), 
+    wd_raw = rowSums(across(c(`48`, `87`, `96`, `101`, `111`, `126`, `156`, `163`, `170`))), 
+    ad_raw = rowSums(across(c(`47`, `86`, `92`, `103`, `130`, `133`, `135`, `143`))), 
+    so_raw = rowSums(across(c(`2`, `14`, `53`, `77`, `97`, `113`, `134`, `137`, `154`, `174`))), 
+    le_raw = rowSums(across(c(`18`, `29`, `62`, `120`, `142`, `155`, `173`))), 
+    dl_raw = rowSums(across(c(`22`, `27`, `37`, `46`, `64`, `66`, `90`, `149`, `153`))), 
+    fc_raw = rowSums(across(c(`5`, `33`, `56`, `61`, `69`, `76`, `85`, `102`, `109`, `148`, `165`, `168`)))
+  ) %>% 
+  mutate(
+    basc3_ha_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((ha_raw - 9.82) / 5.86), 
+      Age >= 8.0 ~ 50 + 10 * ((ha_raw - 7.43) / 4.87)
+    ), 
+    basc3_ag_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((ag_raw - 3.71) / 3.61), 
+      Age >= 8.0 ~ 50 + 10 * ((ag_raw - 2.83) / 2.76)
+    ),
+    basc3_cp_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((cp_raw - 5.83) / 3.93), 
+      Age >= 8.0 ~ 50 + 10 * ((cp_raw - 4.72) / 3.61)
+    ),
+    basc3_ax_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((ax_raw - 10.34) / 5.23), 
+      Age >= 8.0 ~ 50 + 10 * ((ax_raw - 11.64) / 6.18)
+    ),
+    basc3_dp_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((dp_raw - 6.19) / 4.80), 
+      Age >= 8.0 ~ 50 + 10 * ((dp_raw - 5.79) / 4.79)
+    ),
+    basc3_sm_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((sm_raw - 4.84) / 3.93), 
+      Age >= 8.0 ~ 50 + 10 * ((sm_raw - 5.33) / 4.16)
+    ),
+    basc3_ap_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((ap_raw - 7.13) / 4.49), 
+      Age >= 8.0 ~ 50 + 10 * ((ap_raw - 6.48) / 4.30)
+    ),
+    basc3_ay_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((ay_raw - 4.31) / 4.79), 
+      Age >= 8.0 ~ 50 + 10 * ((ay_raw - 3.67) / 4.27)
+    ),
+    basc3_wd_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((wd_raw - 4.70) / 3.98), 
+      Age >= 8.0 ~ 50 + 10 * ((wd_raw - 4.69) / 4.23)
+    ),
+    basc3_ad_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((ad_raw - 14.67) / 5.03), 
+      Age >= 8.0 ~ 50 + 10 * ((ad_raw - 15.48) / 4.61)
+    ),
+    basc3_so_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((so_raw - 20.04) / 6.23), 
+      Age >= 8.0 ~ 50 + 10 * ((so_raw - 21.29) / 6.09)
+    ),
+    basc3_le_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((le_raw - 11.52) / 4.51), 
+      Age >= 8.0 ~ 50 + 10 * ((le_raw - 12.24) / 4.34)
+    ),
+    basc3_dl_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((dl_raw - 16.77) / 4.59), 
+      Age >= 8.0 ~ 50 + 10 * ((dl_raw - 17.95) / 4.43)
+    ),
+    basc3_fc_t = case_when(
+      Age < 8.0 ~ 50 + 10 * ((fc_raw - 24.33) / 6.50), 
+      Age >= 8.0 ~ 50 + 10 * ((fc_raw - 25.98) / 6.29)
+    )
+  )
+
+schoolsub <- basc3sitems |> 
+  select(basc3_ad_t, basc3_fc_t, basc3_so_t, basc3_dl_t, basc3_le_t, basc3_cp_t, basc3_ha_t, basc3_ag_t, basc3_ax_t, basc3_dp_t, basc3_sm_t, basc3_ay_t, basc3_wd_t, basc3_ap_t) %>% 
+    rename(
+    Adaptability = basc3_ad_t, 
+    Functional.Communication = basc3_fc_t, 
+    Social.Skills = basc3_so_t, 
+    Activities.of.Daily.Living = basc3_dl_t, 
+    Leadership = basc3_le_t, 
+    Conduct.Problems = basc3_cp_t, 
+    Hyperactivity = basc3_ha_t, 
+    Aggression = basc3_ag_t, 
+    Anxiety = basc3_ax_t, 
+    Depression = basc3_dp_t, 
+    Somatization = basc3_sm_t, 
+    Atypicality = basc3_ay_t, 
+    Withdrawal = basc3_wd_t, 
+    Attention.Problems = basc3_ap_t
+  )
+```
+
+# =============
+
+# Referred NDD Sample
+
+## Multivariate Skew and Kurtosis
+
+```{r}
+res <- psych::mardia(bascsub, na.rm = TRUE)
+res$b1p   # multivariate skewness
+res$b2p   # multivariate kurtosis
+res$p.skew  # p-value for skewness
+res$p.kurtosis  # p-value for kurtosis
+```
+
+## Hypothesized Structures
+
+### Scoring Structure CFA
+
+```{r}
+set.seed(24)
+library(lavaan)
+scoringbasc <- '
+Adapt =~ Functional.Communication + Social.Skills + Leadership + Activities.of.Daily.Living + Adaptability
+Ext =~ Conduct.Problems + Hyperactivity + Aggression 
+Int =~ Anxiety + Depression + Somatization
+BSI =~ Withdrawal + Atypicality + Attention.Problems + Hyperactivity + Aggression + Depression
+'
+nddscoringfit <- cfa(scoringbasc, data = bascsub, estimator = "MLR")
+summary(nddscoringfit, fit.measures = TRUE, standardized = TRUE)
+fitMeasures(nddscoringfit)
+
+dynamic::cfaHB(nddscoringfit, plot=TRUE)
+
+semPaths(nddscoringfit, "std", layout = "tree")
+```
+
+### Manual CSA Structure CFA
+
+```{r}
+set.seed(24)
+library(lavaan)
+csabasc <- '
+Adapt =~ Functional.Communication + Social.Skills + Leadership + Activities.of.Daily.Living + Adaptability + Attention.Problems + Anxiety
+Ext =~ Conduct.Problems + Hyperactivity + Aggression + Attention.Problems
+Int =~ Anxiety + Depression + Somatization + Withdrawal + Atypicality + Adaptability
+'
+
+nddcsafit <- cfa(csabasc, data = bascsub, estimator = "MLR")
+summary(nddcsafit, fit.measures = TRUE, standardized = TRUE)
+fitMeasures(nddcsafit)
+
+semPaths(nddcsafit, "std", layout = "tree")
+```
+
+## Determining Number of Factors
+
+### Appropriateness
+
+```{r}
+cortest.bartlett(bascsub)
+KMO(bascsub)  
+```
+
+### Scree Plot
+
+```{r}
+set.seed(24)
+bascsub_cor_mat <- cor(bascsub, use = "pairwise.complete.obs")
+
+pa <- parallel(
+  subject = 761,
+  var = ncol(bascsub_cor_mat),
+  rep = 1000,
+  cent = 0.95,
+  model = "factors"
+)
+
+results <- nScree(
+  x = bascsub_cor_mat,
+  aparallel = pa$eigen$qevpea,
+  model = "factors"
+)
+plotnScree(results)
+```
+
+We chose to go with a 3-factor solution following 3- and 4- factor CFAs and inspection of the fit indices and modification indices. The 4th factor in the 4-factor model had little theoretical support, and there were significant correlated residuals that were also unexplained. It is worth noting, however, that neither model showed good fit according to the fit statistics, even following the addition of modification indices (4-factor: CFI = 0.86, RMSEA = 0.132, SRMR = 0.085; 3-factor: CFI = 0.83, RMSEA = 0.141, SRMR = 0.086). Factor loadings for the 4-factor EFA are in the Supplementary Figures.
+
+## ESEM
+
+### 3-factor EFA
+
+```{r}
+set.seed(24)
+# 1. EFA stage
+bascmlfit <- fa(bascsub, 
+                cor = "cor", 
+                nfactors = 3, 
+                rotate="promax", 
+                fm = "minres")
+print(bascmlfit, digits=2, sort=TRUE, cut=.30)
+bascmlfit$loadings
+fa.diagram(bascmlfit)
+```
+
+### 3-factor CFA
+
+```{r}
+set.seed(24)
+# 2. Anchor Factors
+referents.3 <- find_referents(bascmlfit, c("Adaptive_Skills", "Externalizing", "Internalizing")) 
+
+# 3. Convert to SEM
+basc_model_syntax.3 <- syntax_composer(efa_object = bascmlfit,
+                                         referents = referents.3) 
+
+# 4. Fit CFA/ESEM-like model
+basc_cfa_fit.3 <- cfa(model = basc_model_syntax.3, 
+                      data = bascsub,
+                      estimator = "MLR", 
+                      std.lv= T) 
+
+# 5. Evaluate model
+summary(basc_cfa_fit.3, fit.measures = T, std = T) 
+```
+
+# =============
+
+# General Norm Sample
+
+## Multivariate Skew and Kurtosis
+
+```{r}
+res <- MVN::mardia(S)
+print(res)
+```
+
+## Hypothesized Structures
+
+### Scoring Structure CFA
+
+```{r CFA Manual Scoring Structure}
+set.seed(24)
+library(lavaan)
+scoringbasc <- '
+Adapt =~ Functional.Communication + Social.Skills + Leadership + Activities.of.Daily.Living + Adaptability
+Ext =~ Conduct.Problems + Hyperactivity + Aggression 
+Int =~ Anxiety + Depression + Somatization
+BSI =~ Withdrawal + Atypicality + Attention.Problems + Hyperactivity + Aggression + Depression
+'
+genschoolfit <- cfa(scoringbasc, sample.cov = S,
+                        sample.nobs = 600,
+                        std.lv = T)
+summary(genschoolfit, fit.measures = TRUE, standardized = TRUE)
+fitMeasures(genschoolfit)
+
+dynamic::cfaHB(genschoolfit, plot=TRUE)
+
+semPaths(genschoolfit, "std", layout = "tree")
+```
+
+### Manual CSA Structure CFA
+
+```{r CFA Manual EFA Factor Structure}
+set.seed(24)
+library(lavaan)
+csabasc <- '
+Adapt =~ Functional.Communication + Social.Skills + Leadership + Activities.of.Daily.Living + Adaptability + Attention.Problems + Anxiety
+Ext =~ Conduct.Problems + Hyperactivity + Aggression + Attention.Problems
+Int =~ Anxiety + Depression + Somatization + Withdrawal + Atypicality + Adaptability
+'
+
+gencsafit <- cfa(csabasc, sample.cov = S,
+                        sample.nobs = 600, 
+                        std.lv = T)
+summary(gencsafit, fit.measures = TRUE, standardized = TRUE)
+fitMeasures(gencsafit)
+
+dynamic::cfaHB(gencsafit, plot=TRUE)
+
+semPaths(gencsafit, "std", layout = "tree")
+```
+
+## Determining Number of Factors
+
+### Appropriateness
+
+```{r}
+cortest.bartlett(R, 600)
+KMO(R)
+```
+
+### Scree Plot
+
+```{r}
+set.seed(24)
+pa <- parallel(
+  subject = 600,
+  var = ncol(R),
+  rep = 1000,
+  cent = 0.95,
+  model = "factors"
+)
+
+results <- nScree(
+  x = R,
+  aparallel = pa$eigen$qevpea,
+  model = "factors"
+)
+plotnScree(results)
+```
+
+## 3-factor EFA
+
+```{r}
+set.seed(24)
+# 1. EFA stage
+gennormmlfit <- fa(R, 
+                cor = "cor", 
+                nfactors = 3, 
+                n.obs = 600, 
+                rotate = "promax", 
+                fm = "minres")
+print(gennormmlfit, digits=2, sort=TRUE, cut=.30)
+gennormmlfit$loadings
+fa.diagram(gennormmlfit)
+```
+
+## 3-factor CFA
+
+```{r}
+set.seed(24)
+# 2. Anchor Factors
+normreferents.3 <- find_referents(gennormmlfit, c("Adaptive_Skills", "Externalizing", "Internalizing"))
+
+# 3. Convert to SEM
+normbasc_model_syntax.3 <- syntax_composer(efa_object = gennormmlfit,
+                                         referents = normreferents.3) 
+
+# Constrain Conduct Problems (Heywood case)
+adjnormbascmodel <- '
+Adaptive_Skills =~ start(0.053)*Hyperactivity+
+start(0.03)*Aggression+
+0.136*Conduct.Problems+
+0.08*Anxiety+
+start(-0.126)*Depression+
+start(0.078)*Somatization+
+start(-0.506)*Attention.Problems+
+start(-0.33)*Atypicality+
+start(-0.658)*Withdrawal+
+start(0.718)*Adaptability+
+start(0.937)*Social.Skills+
+start(0.978)*Leadership+
+start(0.601)*Activities.of.Daily.Living+
+start(0.965)*Functional.Communication 
+
+Externalizing =~ start(0.818)*Hyperactivity+
+start(0.779)*Aggression+
+0.97*Conduct.Problems+
+-0.148*Anxiety+
+start(0.271)*Depression+
+start(0.139)*Somatization+
+start(0.445)*Attention.Problems+
+start(0.342)*Atypicality+
+start(-0.253)*Withdrawal+
+start(-0.073)*Adaptability+
+start(-0.009)*Social.Skills+
+0.121*Leadership+
+start(-0.363)*Activities.of.Daily.Living+
+start(0.042)*Functional.Communication 
+
+Internalizing =~ start(0.06)*Hyperactivity+
+start(0.045)*Aggression+
+-0.076*Conduct.Problems+
+start(0.953)*Anxiety+
+start(0.6)*Depression+
+start(0.542)*Somatization+
+start(-0.092)*Attention.Problems+
+start(0.213)*Atypicality+
+start(0.275)*Withdrawal+
+start(-0.076)*Adaptability+
+start(0.21)*Social.Skills+
+0.05*Leadership+
+start(0.078)*Activities.of.Daily.Living+
+start(0.071)*Functional.Communication 
+' 
+
+# 4. Fit CFA/ESEM-like model
+normbasc_cfa_fit.3 <- cfa(model = adjnormbascmodel,
+                        sample.cov = R,
+                        sample.nobs = 600, 
+                        std.lv = T, 
+                        sample.cov.rescale = FALSE) 
+
+# 5. Evaluate model
+summary(normbasc_cfa_fit.3, fit.measures = T, std = T) 
+```
+
+# =============
+
+# Australian Sample
+
+## Multivariate Skew and Kurtosis
+
+```{r}
+res <- psych::mardia(aussiesub, na.rm = TRUE)
+res$b1p   # multivariate skewness
+res$b2p   # multivariate kurtosis
+res$p.skew  # p-value for skewness
+res$p.kurtosis  # p-value for kurtosis
+```
+
+## Hypothesized Structures
+
+### Scoring Structure CFA
+
+```{r}
+set.seed(24)
+library(lavaan)
+scoringbasc <- '
+Adapt =~ Functional.Communication + Social.Skills + Leadership + Activities.of.Daily.Living + Adaptability
+Ext =~ Conduct.Problems + Hyperactivity + Aggression 
+Int =~ Anxiety + Depression + Somatization
+BSI =~ Withdrawal + Atypicality + Attention.Problems + Hyperactivity + Aggression + Depression
+'
+aussiescoringfit <- cfa(scoringbasc, data = aussiesub, estimator = "MLR")
+summary(aussiescoringfit, fit.measures = TRUE, standardized = TRUE)
+fitMeasures(aussiescoringfit)
+
+semPaths(aussiescoringfit, "std", layout = "tree")
+```
+
+### Manual CSA Structure CFA
+
+```{r}
+set.seed(24)
+library(lavaan)
+csabasc <- '
+Adapt =~ Functional.Communication + Social.Skills + Leadership + Activities.of.Daily.Living + Adaptability + Attention.Problems + Anxiety
+Ext =~ Conduct.Problems + Hyperactivity + Aggression + Attention.Problems
+Int =~ Anxiety + Depression + Somatization + Withdrawal + Atypicality + Adaptability
+'
+
+aussiecsafit <- cfa(csabasc, data = aussiesub, estimator = "MLR")
+summary(aussiecsafit, fit.measures = TRUE, standardized = TRUE)
+fitMeasures(aussiecsafit)
+
+semPaths(aussiecsafit, "std", layout = "tree")
+```
+
+## Determining Number of Factors
+
+### Appropriateness
+
+```{r}
+cortest.bartlett(aussiesub)
+KMO(aussiesub) 
+```
+
+### Scree Plot
+
+```{r}
+set.seed(24)
+aussiesub_cor_mat <- cor(aussiesub, use = "pairwise.complete.obs")
+
+pa <- parallel(
+  subject = 761,
+  var = ncol(aussiesub_cor_mat),
+  rep = 1000,
+  cent = 0.95,
+  model = "factors"
+)
+
+results <- nScree(
+  x = aussiesub_cor_mat,
+  aparallel = pa$eigen$qevpea,
+  model = "factors"
+)
+plotnScree(results)
+```
+
+## ESEM
+
+### 3-factor EFA
+
+```{r}
+set.seed(24)
+# 1. EFA stage
+aussiemlfit <- fa(aussiesub,
+                nfactors = 3,
+                rotate = "promax", 
+                fm = "minres")
+print(aussiemlfit, digits=2, sort=TRUE, cut=.30)
+aussiemlfit$loadings
+fa.diagram(aussiemlfit)
+```
+
+### 3-factor CFA
+
+```{r}
+set.seed(24)
+# 2. Anchor Factors
+aussiereferents.3 <- find_referents(aussiemlfit, c("Externalizing", "Adaptive_Skills", "Internalizing")) 
+
+# 3. Convert to SEM
+aussie_model_syntax.3 <- syntax_composer(efa_object = aussiemlfit,
+                                         referents = aussiereferents.3) 
+
+
+# 4. Fit CFA/ESEM-like model
+aussie_cfa_fit.3 <- cfa(model = aussie_model_syntax.3,
+                        data = aussiesub, 
+                        estimator = "MLR", 
+                        std.lv = T) 
+
+# 5. Evaluate model
+summary(aussie_cfa_fit.3, fit.measures = T, std = T)
+```
+
+# =============
+
+# School Sample
+
+## Multivariate Skew and Kurtosis
+
+```{r}
+res <- psych::mardia(schoolsub, na.rm = TRUE)
+res$b1p   # multivariate skewness
+res$b2p   # multivariate kurtosis
+res$p.skew  # p-value for skewness
+res$p.kurtosis  # p-value for kurtosis
+```
+
+## Hypothesized Structures
+
+### Scoring Structure CFA
+
+```{r}
+set.seed(24)
+library(lavaan)
+scoringbasc <- '
+Adapt =~ Functional.Communication + Social.Skills + Leadership + Activities.of.Daily.Living + Adaptability
+Ext =~ Conduct.Problems + Hyperactivity + Aggression 
+Int =~ Anxiety + Depression + Somatization
+BSI =~ Withdrawal + Atypicality + Attention.Problems + Hyperactivity + Aggression + Depression
+'
+schoolscoringfit <- cfa(scoringbasc, data = schoolsub, estimator = "MLR")
+summary(schoolscoringfit, fit.measures = TRUE, standardized = TRUE)
+fitMeasures(schoolscoringfit)
+
+dynamic::cfaHB(schoolscoringfit, plot=TRUE)
+
+semPaths(schoolscoringfit, "std", layout = "tree")
+```
+
+### Manual CSA Structure CFA
+
+```{r}
+set.seed(24)
+library(lavaan)
+csabasc <- '
+Adapt =~ Functional.Communication + Social.Skills + Leadership + Activities.of.Daily.Living + Adaptability + Attention.Problems + Anxiety
+Ext =~ Conduct.Problems + Hyperactivity + Aggression + Attention.Problems
+Int =~ Anxiety + Depression + Somatization + Withdrawal + Atypicality + Adaptability
+'
+
+schoolcsafit <- cfa(csabasc, data = schoolsub, estimator = "MLR")
+summary(schoolcsafit, fit.measures = TRUE, standardized = TRUE)
+fitMeasures(schoolcsafit)
+
+semPaths(schoolcsafit, "std", layout = "tree")
+```
+
+## Determining Number of Factors
+
+### Appropriateness
+
+```{r}
+cortest.bartlett(schoolsub)
+KMO(schoolsub) 
+```
+
+### Scree Plot
+
+```{r}
+set.seed(24)
+schoolsub_cor_mat <- cor(schoolsub, use = "pairwise.complete.obs")
+
+pa <- parallel(
+  subject = 761,
+  var = ncol(schoolsub_cor_mat),
+  rep = 1000,
+  cent = 0.95,
+  model = "factors"
+)
+
+results <- nScree(
+  x = schoolsub_cor_mat,
+  aparallel = pa$eigen$qevpea,
+  model = "factors"
+)
+plotnScree(results)
+```
+
+## ESEM
+
+### 3-factor EFA
+
+```{r}
+set.seed(24)
+# 1. EFA stage
+schoolmlfit <- fa(schoolsub, cor = "cor", nfactors = 3, rotate="promax", fm = "minres")
+print(schoolmlfit, digits=2, sort=TRUE, cut=.30)
+bascmlfit$loadings
+fa.diagram(schoolmlfit)
+```
+
+### 3-factor CFA
+
+```{r}
+set.seed(24)
+# 2. Anchor Factors
+referents.3 <- find_referents(schoolmlfit, c("Externalizing", "Adaptive_Skills", "Internalizing"))
+
+# 3. Convert to SEM
+school_model_syntax.3 <- syntax_composer(efa_object = schoolmlfit,
+                                         referents = referents.3)
+
+writeLines(school_model_syntax.3)
+
+# 4. Fit CFA/ESEM-like model
+school_cfa_fit.3 <- cfa(model = school_model_syntax.3,
+                        data = schoolsub, 
+                        estimator = "MLR", 
+                        std.lv= T) 
+
+# 5. Evaluate model 
+summary(school_cfa_fit.3, fit.measures = T, std = T) 
+```
+
+# =============
+
+# Factor Congruence
+
+```{r}
+# 1. Get Loading Matrices
+nddloadings <- lavInspect(basc_cfa_fit.3, "std")$lambda
+genloadings<- lavInspect(normbasc_cfa_fit.3, "std")$lambda
+schoolloadings <- lavInspect(school_cfa_fit.3, "std")$lambda
+aussieloadings <- lavInspect(aussie_cfa_fit.3, "std")$lambda
+
+genloadings <- genloadings[rownames(nddloadings), ]
+
+# 2. Run Factor Congruence Functions
+nddvgen <- factor.congruence(nddloadings, genloadings)
+nddvaussie <- factor.congruence(nddloadings, aussieloadings)
+matches1 <- apply(nddvaussie, 1, which.max)
+nddvaussie_reordered <- nddvaussie[, matches1]
+
+genvaussie <- factor.congruence(genloadings, aussieloadings)
+matches2 <- apply(genvaussie, 1, which.max)
+genvaussie_reordered <- genvaussie[, matches2]
+
+nddvschool <- factor.congruence(nddloadings, schoolloadings)
+matches4 <- apply(nddvschool, 1, which.max)
+nddvschool_reordered <- nddvschool[, matches4]
+
+genvschool <- factor.congruence(genloadings, schoolloadings)
+matches3 <- apply(genvschool, 1, which.max)
+genvschool_reordered <- genvschool[, matches3]
+
+aussievschool <- factor.congruence(aussieloadings, schoolloadings)
+matches5 <- apply(aussievschool, 1, which.max)
+aussievschool_reordered <- aussievschool[, matches5]
+
+# 3. Visualize as Heat Maps
+pheatmap(
+  nddvgen,
+  display_numbers = TRUE,
+  cluster_rows = FALSE,
+  cluster_cols = FALSE,
+  fontsize = 18, 
+  fontsize_number = 18, 
+  number_color = "black",
+  fontsize_row = 18, 
+  fontsize_col = 18, 
+  color = colorRampPalette(
+    c("#D55E00", "white", "#0072B2")
+  )(100),
+  main = "NDD vs General Norm"
+)
+
+p <- pheatmap(
+  nddvaussie_reordered,
+  display_numbers = TRUE,
+  cluster_rows = FALSE,
+  cluster_cols = FALSE,
+  fontsize = 18, 
+  fontsize_number = 18, 
+  number_color = "black",
+  fontsize_row = 18, 
+  fontsize_col = 18, 
+  color = colorRampPalette(
+    c("#D55E00", "white", "#0072B2")
+  )(100),
+  main = "NDD vs Aussie"
+)
+
+pheatmap(
+  genvaussie_reordered,
+  display_numbers = TRUE,
+  cluster_rows = FALSE,
+  cluster_cols = FALSE,
+  fontsize = 18, 
+  fontsize_number = 18, 
+  number_color = "black",
+  fontsize_row = 18, 
+  fontsize_col = 18, 
+  color = colorRampPalette(
+    c("#D55E00", "white", "#0072B2")
+  )(100),
+  main = "General vs Aussie"
+)
+
+pheatmap(
+  genvschool,
+  display_numbers = TRUE,
+  cluster_rows = FALSE,
+  cluster_cols = FALSE,
+  fontsize = 18, 
+  fontsize_number = 18, 
+  number_color = "black",
+  fontsize_row = 18, 
+  fontsize_col = 18, 
+  color = colorRampPalette(
+    c("#D55E00", "white", "#0072B2")
+  )(100),
+  main = "General vs School"
+)
+
+pheatmap(
+  nddvschool_reordered,
+  display_numbers = TRUE,
+  cluster_rows = FALSE,
+  cluster_cols = FALSE,
+  fontsize = 18, 
+  fontsize_number = 18, 
+  number_color = "black",
+  fontsize_row = 18, 
+  fontsize_col = 18, 
+  color = colorRampPalette(
+    c("#D55E00", "white", "#0072B2")
+  )(100),
+  main = "NDD vs School"
+)
+
+pheatmap(
+  aussievschool_reordered,
+  display_numbers = TRUE,
+  cluster_rows = FALSE,
+  cluster_cols = FALSE,
+  fontsize = 18, 
+  fontsize_number = 18, 
+  number_color = "black",
+  fontsize_row = 18, 
+  fontsize_col = 18, 
+  color = colorRampPalette(
+    c("#D55E00", "white", "#0072B2")
+  )(100),
+  main = "Aussie vs. School"
+)
+```
+
+# =============
+
+## Visualize
+
+### semPaths
+
+```{r}
+myLabels <- c("Adapt.", 
+    "Funct.\nComm.", 
+    "Social\nSkills", 
+    "Act.\nDaily\nLiving", 
+    "Lead.", 
+    "Cond.\nProbs", 
+    "Hyper.", 
+    "Aggr.", 
+    "Anx.", 
+    "Dep.", 
+    "Som.", 
+    "Atyp.", 
+    "Withdr.", 
+    "Attn\nProbs", 
+    "Adapt.\nSkills", 
+    "Ext.\nProbs", 
+    "Int.\nProbs")
+
+semPaths(
+  basc_cfa_fit.3,
+  what = "std",
+  whatLabels = "std",
+  nodeLabels = myLabels,
+  layout = "tree2",
+  sizeMan = 6,
+  sizeMan2 = 4,
+  sizeLat = 6,
+  sizeLat2 = 5,
+  edge.label.cex = 0.5,
+  minimum = 0.30,
+  color = "#002D72",
+  posCol = "#0072B2", 
+  negCol = "#D55E00",
+  residuals = FALSE,
+  covAtResiduals = FALSE,
+  intercepts = FALSE, 
+  edge.label.position = 0.85
+)
+```
+
+### qgraph
+
+```{r}
+# Generate loading matrix
+std <- standardizedSolution(basc_cfa_fit.3)
+std <- std %>%
+  mutate(
+    rhs = recode(
+      rhs,
+      basc3_ax_t = "Anxiety",
+      basc3_dp_t = "Depression",
+      basc3_sm_t = "Somatization",
+      basc3_wd_t = "Withdrawal",
+      basc3_ap_t = "Attention\nProblems",
+      basc3_ha_t = "Hyperactivity",
+      basc3_ag_t = "Aggression",
+      basc3_cp_t = "Conduct\nProblems",
+      basc3_ad_t = "Adaptability",
+      basc3_le_t = "Leadership",
+      basc3_so_t = "Social\nSkills",
+      basc3_fc_t = "Functional\nCommunication",
+      basc3_dl_t = "Activities of\nDaily Living",
+      basc3_ay_t = "Atypicality"
+    )
+  )
+
+loads <- subset(std, op == "=~")
+
+loading_mat <- acast(
+  loads,
+  rhs ~ lhs,
+  value.var = "est.std"
+)
+
+# Convert factor loading matrix to edge list
+edges <- melt(loading_mat)
+names(edges) <- c("Item", "Factor", "Loading")
+
+# Keep only salient loadings
+edges <- subset(edges, abs(Loading) >= .20)
+
+# Define nodes
+items <- rownames(loading_mat)
+factors <- colnames(loading_mat)
+nodes <- c(items, factors)
+
+# Create qgraph edge list
+edge_list <- data.frame(
+  from = match(edges$Item, nodes),
+  to = match(edges$Factor, nodes),
+  weight = edges$Loading
+)
+
+# Edge colors
+edge_colors <- ifelse(edges$Loading > 0,
+                      "#2166AC",   # blue
+                      "#B2182B")   # red
+
+# Node colors
+node_colors <- c(
+  rep("#D9EAF7", length(items)),    # light blue items
+  "#66C2A5",                        # factor 1
+  "#FC8D62",                        # factor 2
+  "#8DA0CB"                         # factor 3
+)
+
+# Layout
+# Get spring layout coordinates
+tmp <- qgraph(
+  edge_list,
+  DoNotPlot = TRUE,
+  layout = "spring"
+)
+L <- tmp$layout
+
+# Widen horizontally
+L[,1] <- L[,1] * 2
+
+# Slightly increase vertical spacing
+L[,2] <- L[,2] * 1.5
+
+# Graph
+qgraph(
+  edge_list,
+  labels = nodes,
+  shape = c(
+    rep("square", length(items)),
+    rep("circle", length(factors))
+  ),
+  color = node_colors,
+  edge.color = edge_colors,
+  vsize = c(
+    rep(8, length(items)),
+    rep(14, length(factors))
+  ),
+  label.cex = 1.8,
+  edge.label.cex = 1.0,
+  edge.labels = FALSE,
+  layout = L,
+  theme = "colorblind"
+)
+```
